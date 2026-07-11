@@ -173,8 +173,22 @@
   .overlay.show { display: flex; }
   .modal {
     background: var(--panel); border-radius: 16px; padding: 22px;
-    width: 100%; max-width: 340px; text-align: center;
+    width: 100%; max-width: 340px; text-align: center; position: relative;
   }
+  .close-x {
+    position: absolute; top: 8px; right: 12px;
+    background: none; border: none; color: var(--muted);
+    font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px;
+  }
+  .close-x:active { color: var(--ink); }
+  .toggle-row {
+    margin-top: 14px; width: 100%;
+    background: var(--bg); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 10px; padding: 12px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .toggle-row:active { background: var(--sel); }
+  .toggle-row .val { color: var(--accent); }
   .modal h2 { margin: 0 0 6px; font-size: 20px; }
   .modal p { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
   .diffs { display: flex; flex-direction: column; gap: 8px; }
@@ -334,6 +348,12 @@
   let state = null;
   let cellEls = [];
   let timerId = null;
+  let timerVisible = true;
+  try { timerVisible = localStorage.getItem("sudoku-timer") !== "off"; } catch (e) {}
+
+  function applyTimerVisibility() {
+    timerEl.style.visibility = timerVisible ? "visible" : "hidden";
+  }
 
   function newGame(diffName) {
     const cfg = DIFFS[diffName];
@@ -357,6 +377,7 @@
     buildBoard();
     render();
     startTimer();
+    applyTimerVisibility();
     hideOverlay();
     document.getElementById("notesState").textContent = "Notes: Off";
     document.getElementById("notesBtn").classList.remove("active");
@@ -580,7 +601,7 @@
     modal.innerHTML =
       '<div class="win-emoji">🎉</div>' +
       '<h2>Solved!</h2>' +
-      '<p>' + state.diff + ' &middot; ' + fmt(state.seconds) + ' &middot; ' +
+      '<p>' + state.diff + (timerVisible ? ' &middot; ' + fmt(state.seconds) : '') + ' &middot; ' +
       state.mistakes + ' mistake' + (state.mistakes === 1 ? '' : 's') + '</p>' +
       '<div class="diffs"><button class="diff" id="again">New ' + state.diff + ' Game</button>' +
       '<button class="diff" id="chooseNew">Choose Difficulty</button></div>';
@@ -590,16 +611,28 @@
   }
 
   function showMenu() {
+    const canClose = state && !state.done;
     modal.innerHTML =
-      '<h2>New Game</h2>' +
-      '<p>Choose a difficulty</p>' +
+      (canClose ? '<button class="close-x" id="closeMenu" title="Back to game">&times;</button>' : '') +
+      '<h2>Menu</h2>' +
+      '<p>Choose a difficulty to start a new game</p>' +
       '<div class="diffs">' +
       Object.keys(DIFFS).map(d => '<button class="diff" data-d="' + d + '">' + d + '</button>').join('') +
-      '</div>';
+      '</div>' +
+      '<button class="toggle-row" id="timerToggle">Timer <span class="val">' + (timerVisible ? 'On' : 'Off') + '</span></button>';
     showOverlay();
     modal.querySelectorAll(".diff").forEach(b => {
       b.onclick = () => newGame(b.dataset.d);
     });
+    const closeBtn = document.getElementById("closeMenu");
+    if (closeBtn) closeBtn.onclick = hideOverlay;
+    document.getElementById("timerToggle").onclick = () => {
+      timerVisible = !timerVisible;
+      try { localStorage.setItem("sudoku-timer", timerVisible ? "on" : "off"); } catch (e) {}
+      applyTimerVisibility();
+      const val = document.querySelector("#timerToggle .val");
+      if (val) val.textContent = timerVisible ? "On" : "Off";
+    };
   }
 
   function showOverlay() { overlay.classList.add("show"); }
@@ -625,6 +658,11 @@
   };
   document.getElementById("newBtn").onclick = showMenu;
   document.getElementById("menuBtn").onclick = showMenu;
+
+  // tap outside the modal to resume (only when a game is in progress)
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay && state && !state.done) hideOverlay();
+  });
 
   // ---------- theme ----------
   const themeBtn = document.getElementById("themeBtn");

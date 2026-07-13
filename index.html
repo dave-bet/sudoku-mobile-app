@@ -355,6 +355,56 @@
     timerEl.style.visibility = timerVisible ? "visible" : "hidden";
   }
 
+  // ---------- save / restore progress ----------
+  function saveGame() {
+    if (!state || state.done) return;
+    const data = {
+      diff: state.diff,
+      given: state.given,
+      grid: state.grid,
+      solution: state.solution,
+      notes: state.notes.map(row => row.map(s => Array.from(s))),
+      selected: state.selected,
+      mistakes: state.mistakes,
+      seconds: state.seconds
+    };
+    try { localStorage.setItem("sudoku-save", JSON.stringify(data)); } catch (e) {}
+  }
+
+  function clearSave() {
+    try { localStorage.removeItem("sudoku-save"); } catch (e) {}
+  }
+
+  function loadGame() {
+    let data;
+    try { data = JSON.parse(localStorage.getItem("sudoku-save")); } catch (e) { return false; }
+    if (!data || !data.grid || !data.solution) return false;
+    state = {
+      diff: data.diff || "Medium",
+      given: data.given,
+      grid: data.grid,
+      solution: data.solution,
+      notes: data.notes.map(row => row.map(a => new Set(a))),
+      selected: data.selected || null,
+      mistakes: data.mistakes || 0,
+      maxMistakes: 3,
+      notesMode: false,
+      seconds: data.seconds || 0,
+      done: false,
+      history: []
+    };
+    diffLabelEl.textContent = state.diff;
+    updateMistakes();
+    buildBoard();
+    render();
+    startTimer();
+    applyTimerVisibility();
+    hideOverlay();
+    document.getElementById("notesState").textContent = "Notes: Off";
+    document.getElementById("notesBtn").classList.remove("active");
+    return true;
+  }
+
   function newGame(diffName) {
     const cfg = DIFFS[diffName];
     const { puzzle, solution } = generate(cfg.holes);
@@ -390,6 +440,7 @@
       if (state.done) return;
       state.seconds++;
       timerEl.textContent = fmt(state.seconds);
+      saveGame();
     }, 1000);
   }
 
@@ -469,6 +520,7 @@
       cellEls[idx(sr, sc)].classList.add("sel");
     }
     updatePad();
+    saveGame();
   }
 
   function updatePad() {
@@ -580,12 +632,14 @@
         if (state.grid[r][c] !== state.solution[r][c]) return;
     state.done = true;
     clearInterval(timerId);
+    clearSave();
     showWin();
   }
 
   function gameOver() {
     state.done = true;
     clearInterval(timerId);
+    clearSave();
     modal.innerHTML =
       '<div class="win-emoji">😵</div>' +
       '<h2>Out of tries</h2>' +
@@ -699,7 +753,9 @@
   });
 
   // ---------- start ----------
-  showMenu();
+  window.addEventListener("pagehide", saveGame);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) saveGame(); });
+  if (!loadGame()) showMenu();
 })();
 </script>
 </body>
